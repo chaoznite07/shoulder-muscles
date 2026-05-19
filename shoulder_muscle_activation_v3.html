@@ -1,0 +1,321 @@
+
+<style>
+  .panel { padding: 1rem 1.25rem; }
+  .controls { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 1rem; }
+  .control-group { display: flex; align-items: center; gap: 8px; }
+  .control-group label { font-size: 13px; color: var(--color-text-secondary); white-space: nowrap; }
+  .angle-display { font-size: 22px; font-weight: 500; color: var(--color-text-primary); min-width: 52px; }
+  .mode-btn { font-size: 13px; padding: 5px 14px; border: 0.5px solid var(--color-border-secondary); border-radius: 20px; background: transparent; color: var(--color-text-secondary); cursor: pointer; transition: all .15s; }
+  .mode-btn.active { background: var(--color-background-secondary); color: var(--color-text-primary); border-color: var(--color-border-primary); }
+  .muscle-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin-top: 1rem; }
+  .muscle-card { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 10px 12px; border: 0.5px solid var(--color-border-tertiary); }
+  .muscle-card.highlight { border-color: var(--color-border-info); }
+  .muscle-name { font-size: 13px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 4px; }
+  .muscle-role { font-size: 11px; color: var(--color-text-secondary); margin-bottom: 6px; }
+  .bar-track { height: 6px; background: var(--color-border-tertiary); border-radius: 3px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 3px; transition: width .35s ease, background .35s ease; }
+  .phase-label { font-size: 12px; color: var(--color-text-secondary); margin-top: 6px; display: flex; justify-content: space-between; }
+  .phase-tag { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 500; }
+  .phase-inactive { background: var(--color-background-secondary); color: var(--color-text-tertiary); }
+  .phase-primary { background: #E8F1FB; color: #185FA5; }
+  .phase-secondary { background: #E1F5EE; color: #0F6E56; }
+  .phase-stabilizer { background: #FAEEDA; color: #854F0B; }
+  @media (prefers-color-scheme: dark) {
+    .phase-primary { background: #042C53; color: #B5D4F4; }
+    .phase-secondary { background: #04342C; color: #9FE1CB; }
+    .phase-stabilizer { background: #412402; color: #FAC775; }
+  }
+  .diagram-row { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+  .diagram-wrap { flex: 0 0 220px; }
+  .info-col { flex: 1; min-width: 220px; }
+  .phase-note { font-size: 13px; color: var(--color-text-secondary); line-height: 1.6; padding: 10px 0; border-top: 0.5px solid var(--color-border-tertiary); margin-top: 8px; }
+</style>
+
+<div class="panel">
+  <h2 class="sr-only">Shoulder muscle activation at different ranges of abduction and flexion</h2>
+  <div class="controls">
+    <div style="display:flex;gap:6px;">
+      <button class="mode-btn active" id="btn-abd" onclick="setMode('abduction')">Abduction</button>
+      <button class="mode-btn" id="btn-flex" onclick="setMode('flexion')">Flexion</button>
+    </div>
+    <div class="control-group">
+      <label>Angle</label>
+      <input type="range" id="angle-slider" min="0" max="180" value="0" step="5" oninput="updateAngle(this.value)" style="width:160px;">
+      <span class="angle-display" id="angle-val">0°</span>
+    </div>
+  </div>
+  <div class="diagram-row">
+    <div class="diagram-wrap">
+      <!-- SVG: shoulder joint at cx=110,cy=110. Arm at 0° hangs straight down (pointing to positive y).
+           Arm rotates counter-clockwise as angle increases. 90°=horizontal, 180°=straight up. -->
+      <svg width="220" viewBox="0 0 220 300" role="img">
+        <title>Shoulder angle diagram</title>
+        <desc>Stick figure showing arm position at the current angle of abduction or flexion</desc>
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </marker>
+        </defs>
+        <!-- Torso: centred at x=110 -->
+        <rect x="88" y="110" width="44" height="110" rx="10" fill="var(--color-background-secondary)" stroke="var(--color-border-secondary)" stroke-width="1"/>
+        <!-- Head -->
+        <ellipse cx="110" cy="92" rx="20" ry="24" fill="var(--color-background-secondary)" stroke="var(--color-border-secondary)" stroke-width="1"/>
+        <!-- Shoulder joint at left shoulder -->
+        <circle id="shoulder-dot" cx="88" cy="120" r="8" fill="var(--color-background-primary)" stroke="var(--color-border-primary)" stroke-width="1.5"/>
+        <!-- Arm line: updated by JS -->
+        <line id="arm-line" x1="88" y1="120" x2="88" y2="195" stroke="var(--color-border-primary)" stroke-width="8" stroke-linecap="round"/>
+        <!-- Angle arc -->
+        <path id="angle-arc" d="" fill="none" stroke="#378ADD" stroke-width="1.5" stroke-dasharray="4 2"/>
+        <!-- Angle text -->
+        <text id="angle-svg-label" x="60" y="200" font-size="11" fill="#378ADD" font-family="var(--font-sans)" font-weight="500">0°</text>
+        <!-- Mode label -->
+        <text id="mode-label" x="110" y="268" text-anchor="middle" font-size="11" fill="var(--color-text-secondary)" font-family="var(--font-sans)">Abduction</text>
+      </svg>
+    </div>
+    <div class="info-col">
+      <div id="phase-note" class="phase-note"></div>
+      <div class="muscle-grid" id="muscle-grid"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Shoulder joint pivot
+const JX = 88, JY = 120, ARM_LEN = 75;
+
+// 0° = arm pointing straight down (SVG angle = 90deg = PI/2)
+// 90° = arm horizontal to the left (SVG angle = 180deg = PI)
+// 180° = arm straight up (SVG angle = 270deg = 3*PI/2)
+function armEndpoint(angleDeg) {
+  const svgAngle = (Math.PI / 2) + (angleDeg * Math.PI / 180);
+  return {
+    x: JX + Math.cos(svgAngle) * ARM_LEN,
+    y: JY + Math.sin(svgAngle) * ARM_LEN
+  };
+}
+
+const MUSCLES = {
+  abduction: [
+    {
+      name: "Supraspinatus",
+      role: "Initiates & sustains abduction",
+      color: { primary: "#378ADD", inactive: "#B5D4F4" },
+      activation: (a) => a < 5 ? 0.05 : a <= 15 ? 1 : a <= 90 ? 0.95 : a <= 120 ? 0.85 : 0.7,
+      phase: (a) => a < 5 ? "inactive" : "primary",
+      phaseLabel: (a) => a < 5 ? "Inactive" : "Primary mover",
+      highlight: (a) => false
+    },
+    {
+      name: "Deltoid (middle)",
+      role: "Main abductor >15°",
+      color: { primary: "#0F6E56", inactive: "#9FE1CB" },
+      activation: (a) => a < 15 ? 0.15 : a <= 90 ? 1 : a <= 150 ? 0.9 : 0.6,
+      phase: (a) => a < 15 ? "inactive" : a <= 90 ? "primary" : "secondary",
+      phaseLabel: (a) => a < 15 ? "Minimal" : a <= 90 ? "Primary mover" : "Supporting",
+      highlight: (a) => false
+    },
+    {
+      name: "Trapezius (upper)",
+      role: "Scapular upward rotation",
+      color: { primary: "#BA7517", inactive: "#FAC775" },
+      activation: (a) => a < 30 ? 0.15 : a <= 90 ? 0.65 : a <= 150 ? 1 : 0.8,
+      phase: (a) => a < 30 ? "inactive" : a <= 90 ? "secondary" : "primary",
+      phaseLabel: (a) => a < 30 ? "Minimal" : a <= 90 ? "Scapular stabilizer" : "Primary scapular rotator",
+      highlight: (a) => false
+    },
+    {
+      name: "Trapezius (lower)",
+      role: "Scapular depression & rotation",
+      color: { primary: "#533AB7", inactive: "#CECBF6" },
+      activation: (a) => a < 30 ? 0.1 : a <= 90 ? 0.55 : a <= 150 ? 0.85 : 0.9,
+      phase: (a) => a < 30 ? "inactive" : a <= 90 ? "secondary" : "primary",
+      phaseLabel: (a) => a < 30 ? "Minimal" : a <= 90 ? "Stabilizer" : "Key stabilizer",
+      highlight: (a) => false
+    },
+    {
+      name: "Serratus anterior",
+      role: "Scapular rotation & protraction",
+      color: { primary: "#0F6E56", inactive: "#9FE1CB" },
+      activation: (a) => a < 30 ? 0.1 : a <= 90 ? 0.6 : a <= 150 ? 0.95 : 0.85,
+      phase: (a) => a < 30 ? "inactive" : a <= 90 ? "secondary" : "primary",
+      phaseLabel: (a) => a < 30 ? "Minimal" : a <= 90 ? "Scapular rotator" : "Critical rotator",
+      highlight: (a) => false
+    },
+    {
+      name: "Infraspinatus / Teres minor",
+      role: "Humeral head depression",
+      color: { primary: "#993C1D", inactive: "#F0997B" },
+      activation: (a) => a < 10 ? 0.05 : a <= 90 ? 0.55 : a <= 150 ? 0.4 : 0.3,
+      phase: (a) => a < 10 ? "inactive" : "stabilizer",
+      phaseLabel: (a) => a < 10 ? "Inactive" : "Rotator cuff stabilizer",
+      highlight: (a) => false
+    },
+  ],
+  flexion: [
+    {
+      name: "Anterior deltoid",
+      role: "Primary flexor throughout",
+      color: { primary: "#378ADD", inactive: "#B5D4F4" },
+      activation: (a) => a < 5 ? 0.05 : a <= 90 ? 1 : a <= 150 ? 0.9 : 0.75,
+      phase: (a) => a < 5 ? "inactive" : "primary",
+      phaseLabel: (a) => a < 5 ? "Inactive" : "Primary flexor",
+      highlight: (a) => false
+    },
+    {
+      name: "Pectoralis major (upper)",
+      role: "Flexion to ~60°",
+      color: { primary: "#533AB7", inactive: "#CECBF6" },
+      activation: (a) => a < 10 ? 0.1 : a <= 60 ? 0.9 : a <= 90 ? 0.5 : 0.1,
+      phase: (a) => a < 10 ? "inactive" : a <= 60 ? "primary" : a <= 90 ? "secondary" : "inactive",
+      phaseLabel: (a) => a < 10 ? "Minimal" : a <= 60 ? "Primary (early)" : a <= 90 ? "Diminishing" : "Inactive",
+      highlight: (a) => false
+    },
+    {
+      name: "Coracobrachialis",
+      role: "Assists shoulder flexion",
+      color: { primary: "#0F6E56", inactive: "#9FE1CB" },
+      activation: (a) => a < 5 ? 0.05 : a <= 90 ? 0.75 : a <= 130 ? 0.5 : 0.2,
+      phase: (a) => a < 5 ? "inactive" : "secondary",
+      phaseLabel: (a) => a < 5 ? "Inactive" : "Assisting",
+      highlight: (a) => false
+    },
+    {
+      name: "Trapezius (upper)",
+      role: "Scapular upward rotation",
+      color: { primary: "#BA7517", inactive: "#FAC775" },
+      activation: (a) => a < 30 ? 0.1 : a <= 90 ? 0.6 : a <= 150 ? 0.85 : 0.75,
+      phase: (a) => a < 30 ? "inactive" : a <= 90 ? "secondary" : "primary",
+      phaseLabel: (a) => a < 30 ? "Minimal" : a <= 90 ? "Scapular stabilizer" : "Scapular rotator",
+      highlight: (a) => false
+    },
+    {
+      name: "Trapezius (lower)",
+      role: "Posterior tilt & depression of scapula",
+      color: { primary: "#993C1D", inactive: "#F0997B" },
+      activation: (a) => a < 30 ? 0.1 : a <= 90 ? 0.45 : a <= 120 ? 0.7 : a <= 150 ? 0.95 : 1,
+      phase: (a) => a < 30 ? "inactive" : a <= 90 ? "secondary" : a <= 120 ? "secondary" : "primary",
+      phaseLabel: (a) => a < 30 ? "Minimal" : a <= 90 ? "Low-level stabilizer" : a <= 120 ? "Increasing" : "Critical end-range",
+      highlight: (a) => a > 120
+    },
+    {
+      name: "Serratus anterior",
+      role: "Scapular upward rotation",
+      color: { primary: "#0F6E56", inactive: "#9FE1CB" },
+      activation: (a) => a < 30 ? 0.1 : a <= 90 ? 0.55 : a <= 150 ? 0.9 : 0.85,
+      phase: (a) => a < 30 ? "inactive" : a <= 90 ? "secondary" : "primary",
+      phaseLabel: (a) => a < 30 ? "Minimal" : a <= 90 ? "Supporting" : "Critical",
+      highlight: (a) => false
+    },
+    {
+      name: "Biceps brachii (long head)",
+      role: "Weak shoulder flexor",
+      color: { primary: "#0F6E56", inactive: "#9FE1CB" },
+      activation: (a) => a < 10 ? 0.1 : a <= 90 ? 0.45 : 0.3,
+      phase: (a) => a < 10 ? "inactive" : "secondary",
+      phaseLabel: (a) => a < 10 ? "Inactive" : "Weak assistant",
+      highlight: (a) => false
+    },
+  ]
+};
+
+const PHASE_NOTES = {
+  abduction: [
+    { max: 15,  note: "0–15°: Supraspinatus initiates the movement. The deltoid is nearly silent at this range." },
+    { max: 90,  note: "15–90°: Middle deltoid takes over as the primary mover. Rotator cuff muscles depress the humeral head to prevent impingement." },
+    { max: 120, note: "90–120°: Scapular upward rotation becomes essential — trapezius and serratus anterior must rotate the scapula for the arm to continue rising." },
+    { max: 180, note: "120–180°: Full overhead. Scapular rotators dominate. Lower trap contributes to scapular depression and control alongside the upper trap." }
+  ],
+  flexion: [
+    { max: 60,  note: "0–60°: Anterior deltoid and upper pectoralis major co-activate as primary flexors. Coracobrachialis assists." },
+    { max: 90,  note: "60–90°: Pectoralis major drops out. Anterior deltoid takes clear dominance. Scapular stabilizers begin increasing activity." },
+    { max: 120, note: "90–120°: Scapular upward rotation is critical. Upper trap and serratus anterior work hard. Lower trapezius ramps up to control scapular posterior tilt." },
+    { max: 180, note: "120–180°: Lower trapezius is now the key scapular stabilizer — it posteriorly tilts and depresses the scapula, preventing anterior tipping that causes impingement. Weakness here leads to the classic rib flare compensation." }
+  ]
+};
+
+let mode = "abduction";
+let angle = 0;
+
+function setMode(m) {
+  mode = m;
+  document.getElementById("btn-abd").classList.toggle("active", m === "abduction");
+  document.getElementById("btn-flex").classList.toggle("active", m === "flexion");
+  document.getElementById("mode-label").textContent = m === "abduction" ? "Abduction" : "Flexion";
+  render();
+}
+
+function updateAngle(v) {
+  angle = parseInt(v);
+  document.getElementById("angle-val").textContent = angle + "°";
+  render();
+}
+
+function getPhaseNote() {
+  const notes = PHASE_NOTES[mode];
+  for (const n of notes) if (angle <= n.max) return n.note;
+  return notes[notes.length - 1].note;
+}
+
+function phaseClass(p) {
+  if (p === "primary") return "phase-primary";
+  if (p === "secondary") return "phase-secondary";
+  if (p === "stabilizer") return "phase-stabilizer";
+  return "phase-inactive";
+}
+
+function render() {
+  // Arm endpoint: 0° = straight down, increases counter-clockwise (toward overhead)
+  const ep = armEndpoint(angle);
+  document.getElementById("arm-line").setAttribute("x2", ep.x.toFixed(1));
+  document.getElementById("arm-line").setAttribute("y2", ep.y.toFixed(1));
+
+  // Arc from arm-down (svgAngle=PI/2) sweeping counter-clockwise by `angle` degrees
+  const arcR = 26;
+  const startSvg = Math.PI / 2; // pointing down
+  const endSvg = startSvg + (angle * Math.PI / 180);
+  const ax1 = JX + arcR * Math.cos(startSvg);
+  const ay1 = JY + arcR * Math.sin(startSvg);
+  const ax2 = JX + arcR * Math.cos(endSvg);
+  const ay2 = JY + arcR * Math.sin(endSvg);
+  const largeArc = angle > 180 ? 1 : 0;
+  // sweep-flag=1 draws counter-clockwise in SVG coords (y-down), which visually goes left/up
+  const arcPath = angle > 0
+    ? `M${ax1.toFixed(1)} ${ay1.toFixed(1)} A${arcR} ${arcR} 0 ${largeArc} 1 ${ax2.toFixed(1)} ${ay2.toFixed(1)}`
+    : "";
+  document.getElementById("angle-arc").setAttribute("d", arcPath);
+
+  // Position angle label near the midpoint of the arc
+  const midSvg = startSvg + (angle * Math.PI / 180 / 2);
+  const lx = JX + (arcR + 14) * Math.cos(midSvg);
+  const ly = JY + (arcR + 14) * Math.sin(midSvg);
+  const lbl = document.getElementById("angle-svg-label");
+  lbl.setAttribute("x", (lx - 6).toFixed(1));
+  lbl.setAttribute("y", (ly + 4).toFixed(1));
+  lbl.textContent = angle > 0 ? angle + "°" : "";
+
+  // Muscle cards
+  const muscles = MUSCLES[mode];
+  const grid = document.getElementById("muscle-grid");
+  grid.innerHTML = muscles.map(m => {
+    const act = m.activation(angle);
+    const pct = Math.round(act * 100);
+    const ph = m.phase(angle);
+    const pLabel = m.phaseLabel(angle);
+    const isHighlighted = m.highlight(angle);
+    const barColor = ph === "inactive" ? m.color.inactive : m.color.primary;
+    return `<div class="muscle-card${isHighlighted ? ' highlight' : ''}">
+      <div class="muscle-name">${m.name}${isHighlighted ? ' ★' : ''}</div>
+      <div class="muscle-role">${m.role}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${barColor}"></div></div>
+      <div class="phase-label">
+        <span style="color:var(--color-text-tertiary);font-size:11px">${pct}% active</span>
+        <span class="phase-tag ${phaseClass(ph)}">${pLabel}</span>
+      </div>
+    </div>`;
+  }).join("");
+
+  document.getElementById("phase-note").textContent = getPhaseNote();
+}
+
+render();
+</script>
